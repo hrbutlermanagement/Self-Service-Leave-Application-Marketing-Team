@@ -1,0 +1,224 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Self-Service Leave Application</title>
+  <style>
+    * { box-sizing: border-box; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; }
+    body { background-color: #f4f7f6; margin: 0; padding: 20px; color: #333; }
+    .container { max-width: 500px; margin: 0 auto; background: #fff; padding: 25px; border-radius: 10px; box-shadow: 0 4px 15px rgba(0,0,0,0.1); }
+    .logo-container { text-align: center; margin-bottom: 15px; }
+    .logo-container img { max-width: 150px; height: auto; object-fit: contain; }
+    h2 { text-align: center; color: #2c3e50; margin-bottom: 20px; }
+    .form-group { margin-bottom: 15px; }
+    label { display: block; margin-bottom: 5px; font-weight: bold; font-size: 14px; }
+    input, select, textarea { width: 100%; padding: 10px; border: 1px solid #ccc; border-radius: 5px; font-size: 14px; }
+    .info-box { background: #eef6ff; border-left: 4px solid #3498db; padding: 10px; margin-bottom: 15px; font-size: 13px; border-radius: 3px; }
+    button { width: 100%; padding: 12px; background: #2ecc71; color: white; border: none; border-radius: 5px; font-size: 16px; font-weight: bold; cursor: pointer; transition: 0.3s; }
+    button:hover { background: #27ae60; }
+    button:disabled { background: #bdc3c7; }
+    .footer { text-align: center; margin-top: 20px; font-size: 11px; color: #7f8c8d; font-style: italic; }
+    #dokterGroup { display: none; }
+  </style>
+</head>
+<body>
+
+<div class="container">
+  <div class="logo-container">
+    <img src="logo.png" alt="Logo Company">
+  </div>
+  <h2>Aplikasi Time-Off Tim Marketing</h2>
+  <!-- Menggunakan onsubmit dengan return false untuk mengunci agar halaman tidak reload -->
+  <form id="cutiForm" onsubmit="handleFormSubmit(event)">
+    <div class="form-group">
+      <label for="nama">Nama Karyawan</label>
+      <select id="nama" required onchange="updateKaryawanInfo()">
+        <option value="">-- Pilih Nama --</option>
+      </select>
+    </div>
+
+    <div class="form-group">
+      <label for="jabatan">Jabatan</label>
+      <input type="text" id="jabatan" readonly placeholder="Otomatis terisi">
+    </div>
+
+    <div class="info-box" id="infoCuti">
+      Pilih nama karyawan untuk melihat sisa kuota cuti.
+    </div>
+
+    <div class="form-group">
+      <label for="jenisCuti">Jenis Cuti</label>
+      <select id="jenisCuti" required onchange="toggleDokterInput()">
+        <option value="">-- Pilih Jenis Cuti --</option>
+        <option value="Annual Leave">Cuti Tahunan (Annual Leave)</option>
+        <option value="Unpaid Leave">Unpaid Leave (Potong Gaji)</option>
+        <option value="Sick Leave">Sick Leave (Cuti Sakit)</option>
+      </select>
+    </div>
+
+    <div class="form-group">
+      <label for="tglMulai">Tanggal Mulai</label>
+      <input type="date" id="tglMulai" required onchange="hitungHari()">
+    </div>
+
+    <div class="form-group">
+      <label for="tglSelesai">Tanggal Selesai</label>
+      <input type="date" id="tglSelesai" required onchange="hitungHari()">
+    </div>
+
+    <div class="form-group">
+      <label for="jumlahHari">Jumlah Hari Kerja</label>
+      <input type="number" id="jumlahHari" readonly value="0">
+    </div>
+
+    <div class="form-group">
+      <label for="reason">Alasan Pengajuan</label>
+      <textarea id="reason" rows="3" required placeholder="Masukkan alasan..."></textarea>
+    </div>
+
+    <div class="form-group" id="dokterGroup">
+      <label for="suratDokter">Lampiran Surat Dokter (Wajib Format PDF/Foto)</label>
+      <input type="file" id="suratDokter" accept="image/*,application/pdf">
+    </div>
+
+    <button type="submit" id="btnSubmit">Submit Pengajuan Time-Off</button>
+  </form>
+
+  <div class="footer">
+    tukang koding: nino paulus copyright oktober 2026
+  </div>
+</div>
+
+<script>
+  const API_URL = "https://script.google.com/macros/s/AKfycbzD3l9uNbFK-DF936bv2EV-NPXs2v4iRZYeDJVvIoGoygZ4_VQJW84xlffqzRAuEvzK/exec";
+  let dataKaryawan = [];
+
+  // Load Data Karyawan dari Spreadsheet saat halaman dibuka
+  window.onload = function() {
+    fetch(API_URL + "?action=get_karyawan")
+      .then(res => res.json())
+      .then(data => {
+        dataKaryawan = data;
+        let selectNama = document.getElementById("nama");
+        for (let i = 1; i < data.length; i++) {
+          let opt = document.createElement("option");
+          opt.value = data[i][1];
+          opt.textContent = data[i][1] + " (" + data[i][0] + ")";
+          selectNama.appendChild(opt);
+        }
+      })
+      .catch(err => console.error("Error fetching karyawan:", err));
+  };
+
+  function updateKaryawanInfo() {
+    let nama = document.getElementById("nama").value;
+    let jabatanInput = document.getElementById("jabatan");
+    let infoBox = document.getElementById("infoCuti");
+
+    let found = dataKaryawan.find(k => k[1] === nama);
+    if (found) {
+      jabatanInput.value = found[2];
+      // Murni mengambil data Prorata (indeks 4) untuk semua karyawan
+      let prorata = parseInt(found[4]) || 0;
+      infoBox.innerHTML = `<b>Kuota Cuti Prorata 2026:</b> ${prorata} hari`;
+    } else {
+      jabatanInput.value = "";
+      infoBox.innerHTML = "Pilih nama karyawan untuk melihat sisa kuota cuti.";
+    }
+  }
+
+  function toggleDokterInput() {
+    let jenis = document.getElementById("jenisCuti").value;
+    let dokterGroup = document.getElementById("dokterGroup");
+    if (jenis === "Sick Leave") {
+      dokterGroup.style.display = "block";
+      document.getElementById("suratDokter").setAttribute("required", "true");
+    } else {
+      dokterGroup.style.display = "none";
+      document.getElementById("suratDokter").removeAttribute("required");
+    }
+  }
+
+  function hitungHari() {
+    let t1Val = document.getElementById("tglMulai").value;
+    let t2Val = document.getElementById("tglSelesai").value;
+    
+    if (t1Val && t2Val) {
+      let t1 = new Date(t1Val);
+      let t2 = new Date(t2Val);
+      if (t2 >= t1) {
+        let diffTime = t2.getTime() - t1.getTime();
+        let diffDays = Math.round(diffTime / (1000 * 3600 * 24)) + 1;
+        document.getElementById("jumlahHari").value = diffDays;
+      } else {
+        document.getElementById("jumlahHari").value = 0;
+      }
+    } else {
+      document.getElementById("jumlahHari").value = 0;
+    }
+  }
+
+  // Fungsi utama untuk menangani submit tanpa refresh halaman
+  function handleFormSubmit(e) {
+    e.preventDefault(); // Memblokir total aksi bawaan form agar tidak reload
+    
+    let btn = document.getElementById("btnSubmit");
+    btn.disabled = true;
+    btn.textContent = "Mengirim...";
+
+    let fileInput = document.getElementById("suratDokter");
+    let fileBase64 = "-";
+
+    if (fileInput.files.length > 0) {
+      let reader = new FileReader();
+      reader.onload = function() {
+        fileBase64 = reader.result;
+        kirimData(fileBase64);
+      };
+      reader.readAsDataURL(fileInput.files[0]);
+    } else {
+      kirimData("-");
+    }
+
+    return false;
+  }
+
+  function kirimData(fileData) {
+    let payload = {
+      action: "submit_cuti",
+      nama: document.getElementById("nama").value,
+      jabatan: document.getElementById("jabatan").value,
+      jenisCuti: document.getElementById("jenisCuti").value,
+      tglMulai: document.getElementById("tglMulai").value,
+      tglSelesai: document.getElementById("tglSelesai").value,
+      jumlahHari: document.getElementById("jumlahHari").value,
+      reason: document.getElementById("reason").value,
+      fileBase64: fileData
+    };
+
+    fetch(API_URL, {
+      method: "POST",
+      body: JSON.stringify(payload)
+    })
+    .then(res => res.json())
+    .then(res => {
+      let reqId = (res && res.reqId) ? res.reqId : "Berhasil";
+      alert("Pengajuan Berhasil Dikirim! ID: " + reqId);
+      document.getElementById("cutiForm").reset();
+      document.getElementById("jumlahHari").value = "0";
+      document.getElementById("infoCuti").innerHTML = "Pilih nama karyawan untuk melihat sisa kuota cuti.";
+      document.getElementById("btnSubmit").disabled = false;
+      document.getElementById("btnSubmit").textContent = "Kirim Pengajuan Cuti";
+    })
+    .catch(err => {
+      console.error(err);
+      alert("Terjadi kesalahan pengiriman. Coba lagi!");
+      document.getElementById("btnSubmit").disabled = false;
+      document.getElementById("btnSubmit").textContent = "Kirim Pengajuan Cuti";
+    });
+  }
+</script>
+
+</body>
+</html>
